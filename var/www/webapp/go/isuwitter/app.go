@@ -52,13 +52,14 @@ const (
 )
 
 var (
-	re             *render.Render
-	rex            = regexp.MustCompile("#(\\S+)(\\s|$)")
-	store          *sessions.FilesystemStore
-	db             *sql.DB
-	errInvalidUser = errors.New("Invalid User")
-	redisClient    *redis.Client
-	logger, _      = zap.NewDevelopment()
+	re              *render.Render
+	rex             = regexp.MustCompile("#(\\S+)(\\s|$)")
+	rexTweetHashTag = regexp.MustCompile(">#(%s)</a>")
+	store           *sessions.FilesystemStore
+	db              *sql.DB
+	errInvalidUser  = errors.New("Invalid User")
+	redisClient     *redis.Client
+	logger, _       = zap.NewDevelopment()
 )
 
 func getuserID(name string) int {
@@ -197,7 +198,7 @@ func initializeRedisHandler(w http.ResponseWriter, r *http.Request) {
 
 	{
 		// create init.rdb
-		rows, err := db.Query(`SELECT * FROM tweets ORDER BY created_at DESC`)
+		rows, err := db.Query(`SELECT * FROM tweets ORDER BY created_at`)
 		if err != nil {
 			badRequest(w)
 			logger.Error("db.Query(`SELECT * FROM tweets ORDER BY created_at DESC`)", zap.Error(err))
@@ -214,6 +215,8 @@ func initializeRedisHandler(w http.ResponseWriter, r *http.Request) {
 			if err := redisTweetStore(getUserName(t.UserID), t.Text); err != nil {
 				return
 			}
+			hashTag := rexTweetHashTag.FindStringSubmatch(t.Text)[0]
+			redisClient.LPush("hashtag-"+hashTag, getUserName(t.UserID)+"\t"+t.CreatedAt.Format("2006-01-02 15:04:05")+"\t"+t.Text)
 		}
 	}
 
@@ -652,7 +655,7 @@ func searchHandler(w http.ResponseWriter, r *http.Request) {
 
 	query := r.URL.Query().Get("q")
 	tweets := make([]*Tweet, 0)
-	
+
 	if mux.Vars(r)["tag"] != "" && until == "" {
 		//redisClient.LPush("hashtag-"+hashTag, userName+"\t"+time.Now().Format("2006-01-02 15:04:05")+"\t"+text)
 		query = "#" + mux.Vars(r)["tag"]
