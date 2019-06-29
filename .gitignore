@@ -1,2 +1,8 @@
 *
 !.gitignore
+# /root/.vimrc
+/*
+!/root
+/root/*
+!/root/.vimrc
+
