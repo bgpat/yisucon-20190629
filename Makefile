@@ -81,4 +81,5 @@ clean:
 	git config --global user.name "anonymous"
 
 kataribe:
-	cat /var/log/nginx/access.log | /var/www/kataribe -f /var/www/kataribe.toml > /var/www/kataribe.log
+	sh ./kataribe.sh
+

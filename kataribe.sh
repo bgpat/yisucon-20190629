@@ -1,2 +1,4 @@
-curl -X POST --data-urlencode "payload={\"channel\": \"#kataribe\", \"username\": \"webhookbot\", \"text\": \"これは webhookbot という名のボットから #kataribe に投稿されています。\", \"icon_emoji\": \":ghost:\"}" https://hooks.slack.com/services/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
+#!/bin/sh
+cat /var/log/nginx/access.log | /var/www/kataribe -f /var/www/kataribe.toml > /var/www/kataribe.log
+curl -X POST --data-urlencode "`cat /var/www/kataribe.log | ruby kataribe.rb`" https://hooks.slack.com/services/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
 
