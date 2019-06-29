@@ -122,6 +122,15 @@ func initializeHandler(w http.ResponseWriter, r *http.Request) {
 			logger.Error("failed to stop redis", zap.Error(err))
 		}
 
+		for {
+			res, err := redisClient.Ping().Result()
+			if err != nil {
+				logger.Info("redis.Ping()", zap.Error(err))
+				break
+			}
+			logger.Info("redis.Ping()", zap.String("result", res))
+		}
+
 		init, err := os.Open("/var/lib/redis/init.rdb")
 		if err != nil {
 			logger.Error("failed to open init.rdb", zap.Error(err))
