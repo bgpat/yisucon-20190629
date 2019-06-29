@@ -229,6 +229,7 @@ func initializeRedisHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if err := redisTweetStore(getUserName(t.UserID), t.Text); err != nil {
+				badRequest(w)
 				return
 			}
 		}
