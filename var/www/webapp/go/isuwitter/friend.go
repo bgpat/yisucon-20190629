@@ -24,6 +24,8 @@ func loadFriends(pctx context.Context, name string) (context.Context, []string, 
 	}
 	if len(friends) == 0 {
 		logger.Warn("no friends", zap.String("name", name), zap.String("key", "friends-"+name))
+	} else {
+		logger.Debug("friends", zap.String("name", name), zap.String("key", "friends-"+name), zap.Int("len", len(friends)))
 	}
 	return ctx, friends, nil
 }
