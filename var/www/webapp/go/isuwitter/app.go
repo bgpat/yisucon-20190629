@@ -8,14 +8,17 @@ import (
 	"fmt"
 	"html"
 	"html/template"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"regexp"
 	"strings"
 	"time"
 
+	"github.com/go-redis/redis"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
@@ -53,6 +56,7 @@ var (
 	store          *sessions.FilesystemStore
 	db             *sql.DB
 	errInvalidUser = errors.New("Invalid User")
+	redisClient    *redis.Client
 	logger, _      = zap.NewDevelopment()
 )
 
@@ -74,6 +78,10 @@ func getUserName(id int) string {
 		return ""
 	}
 	return user.Name
+}
+
+func redisTweetStore(userName string, text string) {
+	redisClient.LPush("tweet-"+userName, time.Now().Format("2006-01-02 15:04:05")+"\t"+text)
 }
 
 func htmlify(tweet string) string {
@@ -108,6 +116,56 @@ func initializeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer resp.Body.Close()
+
+	{
+		if err := exec.Command("systemctl", "stop", "redis").Run(); err != nil {
+			logger.Error("failed to stop redis", zap.Error(err))
+		}
+
+		for {
+			res, err := redisClient.Ping().Result()
+			if err != nil {
+				logger.Info("redis.Ping()", zap.Error(err))
+				break
+			}
+			logger.Info("redis.Ping()", zap.String("result", res))
+		}
+
+		init, err := os.Open("/var/lib/redis/init.rdb")
+		if err != nil {
+			logger.Error("failed to open init.rdb", zap.Error(err))
+			return
+		}
+		defer init.Close()
+		dump, err := os.OpenFile("/var/lib/redis/dump.rdb", os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			logger.Error("failed to open dump.rdb", zap.Error(err))
+			return
+		}
+		defer dump.Close()
+		if _, err := io.Copy(dump, init); err != nil {
+			logger.Error("failed to copy redis db", zap.Error(err))
+		}
+
+		if err := exec.Command("systemctl", "start", "redis").Run(); err != nil {
+			logger.Error("failed to stop redis", zap.Error(err))
+		}
+	}
+	// -- create init.rdb
+	//
+	// redisClient.FlushDB()
+	//
+	// rows, err := db.Query(`SELECT * FROM tweets ORDER BY created_at DESC`)
+	// for rows.Next() {
+	// 	t := Tweet{}
+	// 	err := rows.Scan(&t.ID, &t.UserID, &t.Text, &t.CreatedAt)
+	// 	if err != nil {
+	// 		badRequest(w)
+	// 		return
+	// 	}
+	//
+	// 	redisTweetStore(getUserName(t.UserID), t.Text)
+	// }
 
 	re.JSON(w, http.StatusOK, map[string]string{"result": "ok"})
 }
@@ -228,6 +286,7 @@ func tweetPostHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_, err := db.Exec(`INSERT INTO tweets (user_id, text, created_at) VALUES (?, ?, NOW())`, userID, text)
+	redisTweetStore(getUserName(userID.(int)), text)
 	if err != nil {
 		badRequest(w)
 		return
@@ -386,36 +445,52 @@ func userHandler(w http.ResponseWriter, r *http.Request) {
 	until := r.URL.Query().Get("until")
 	var rows *sql.Rows
 	var err error
-	if until == "" {
-		rows, err = db.Query(`SELECT * FROM tweets WHERE user_id = ? ORDER BY created_at DESC`, userID)
-	} else {
-		rows, err = db.Query(`SELECT * FROM tweets WHERE user_id = ? AND created_at < ? ORDER BY created_at DESC`, userID, until)
-	}
-	if err != nil {
-		if err == sql.ErrNoRows {
-			http.NotFound(w, r)
-			return
-		}
-		badRequest(w)
-		return
-	}
-	defer rows.Close()
 
 	tweets := make([]*Tweet, 0)
-	for rows.Next() {
-		t := Tweet{}
-		err := rows.Scan(&t.ID, &t.UserID, &t.Text, &t.CreatedAt)
-		if err != nil && err != sql.ErrNoRows {
+	if until == "" {
+		//		rows, err = db.Query(`SELECT * FROM tweets WHERE user_id = ? ORDER BY created_at DESC`, userID)
+		//redisClient.LPush("tweet-"+getUserName(userID.(int)), time.Now().String()+"\t"+text)
+		lRange, err := redisClient.LRange("tweet-"+user, 0, 50).Result()
+		if err != nil {
 			badRequest(w)
 			return
 		}
-		t.HTML = htmlify(t.Text)
-		t.Time = t.CreatedAt.Format("2006-01-02 15:04:05")
-		t.UserName = user
-		tweets = append(tweets, &t)
+		for _, tweet := range lRange {
+			splited := strings.SplitN(tweet, "\t", 2)
 
-		if len(tweets) == perPage {
-			break
+			t := Tweet{}
+			t.Time = splited[0]
+			t.HTML = htmlify(splited[1])
+			t.UserName = user
+			tweets = append(tweets, &t)
+		}
+	} else {
+		rows, err = db.Query(`SELECT * FROM tweets WHERE user_id = ? AND created_at < ? ORDER BY created_at DESC`, userID, until)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				http.NotFound(w, r)
+				return
+			}
+			badRequest(w)
+			return
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			t := Tweet{}
+			err := rows.Scan(&t.ID, &t.UserID, &t.Text, &t.CreatedAt)
+			if err != nil && err != sql.ErrNoRows {
+				badRequest(w)
+				return
+			}
+			t.HTML = htmlify(t.Text)
+			t.Time = t.CreatedAt.Format("2006-01-02 15:04:05")
+			t.UserName = user
+			tweets = append(tweets, &t)
+
+			if len(tweets) == perPage {
+				break
+			}
 		}
 	}
 
@@ -553,6 +628,12 @@ func fileRead(fp string) []byte {
 }
 
 func main() {
+	redisClient = redis.NewClient(&redis.Options{
+		Addr:     "localhost:6379",
+		Password: "", // no password set
+		DB:       0,  // use default DB
+	})
+
 	host := os.Getenv("ISUWITTER_DB_HOST")
 	if host == "" {
 		host = "localhost"
