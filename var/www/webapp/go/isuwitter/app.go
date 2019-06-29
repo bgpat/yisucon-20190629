@@ -127,7 +127,7 @@ func initializeHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		defer init.Close()
-		dump, err := os.Open("/var/lib/redis/dump.rdb")
+		dump, err := os.OpenFile("/var/lib/redis/dump.rdb", os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
 			logger.Error("failed to open dump.rdb", zap.Error(err))
 			return
