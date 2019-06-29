@@ -243,6 +243,7 @@ func topHandler(w http.ResponseWriter, r *http.Request) {
 
 	if cache, err := getHomeCache(name); err == nil {
 		w.Write([]byte(cache))
+		return
 	} else {
 		logger.Debug(
 			"cache miss",
