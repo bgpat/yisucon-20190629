@@ -12,7 +12,7 @@ import (
 	"io"
 	"log"
 	"net/http"
-	_ "net/http/pprof"
+	"net/http/pprof"
 	"net/url"
 	"os"
 	"os/exec"
@@ -840,6 +840,8 @@ func main() {
 	i := r.PathPrefix("/").Subrouter()
 	i.Methods("GET").HandlerFunc(topHandler)
 	i.Methods("POST").HandlerFunc(tweetPostHandler)
+
+	r.HandleFunc("/trace", pprof.Trace).Methods("GET")
 
 	log.Fatal(http.ListenAndServe(":8080", r))
 }
