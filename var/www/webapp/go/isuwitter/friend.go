@@ -1,20 +1,22 @@
 package main
 
-import (
-	"encoding/json"
-	"net/http"
-)
+import "strings"
+
+type Friend struct {
+	ID      int64  `db:"id"`
+	Me      string `db:"me"`
+	Friends string `db:"friends"`
+}
 
 func loadFriends(name string) ([]string, error) {
-	resp, err := http.DefaultClient.Get(isutomoEndpoint + pathURIEscape("/"+name))
+	friend := new(Friend)
+	stmt, err := db.Prepare("SELECT * FROM friends WHERE me = ?")
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	var data struct {
-		Result []string `json:"friends"`
+	err = stmt.QueryRow(name).Scan(&friend.ID, &friend.Me, &friend.Friends)
+	if err != nil {
+		return nil, err
 	}
-	err = json.NewDecoder(resp.Body).Decode(&data)
-	return data.Result, err
+	return strings.Split(friend.Friends, ","), nil
 }
