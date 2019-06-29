@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-redis/redis"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
@@ -52,6 +53,7 @@ var (
 	store          *sessions.FilesystemStore
 	db             *sql.DB
 	errInvalidUser = errors.New("Invalid User")
+	redisClient         *redis.Client
 )
 
 func getuserID(name string) int {
@@ -551,6 +553,12 @@ func fileRead(fp string) []byte {
 }
 
 func main() {
+	redisClient = redis.NewClient(&redis.Options{
+		Addr:     "localhost:6379",
+		Password: "", // no password set
+		DB:       0,  // use default DB
+	})
+
 	host := os.Getenv("ISUWITTER_DB_HOST")
 	if host == "" {
 		host = "localhost"
