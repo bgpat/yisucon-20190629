@@ -94,8 +94,8 @@ func redisTweetStore(userName string, text string) error {
 	return err
 }
 
-func getHomeCache(name string) error {
-	return nil
+func getHomeCache(name string) (string, error) {
+	return redisClient.Get(name).Result()
 }
 
 func updateHomeCache(name string, home string) error {
@@ -235,6 +235,19 @@ func topHandler(w http.ResponseWriter, r *http.Request) {
 	if ok {
 		name = getUserName(userID.(int))
 	}
+	until := r.URL.Query().Get("until")
+
+	if cache, err := getHomeCache(name); err == nil {
+		w.Write([]byte(cache))
+	} else {
+		logger.Debug(
+			"cache miss",
+			zap.Error(err),
+			zap.String("name", name),
+		)
+		badRequest(w)
+		return
+	}
 
 	if name == "" {
 		flush, _ := session.Values["flush"].(string)
@@ -252,7 +265,6 @@ func topHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	until := r.URL.Query().Get("until")
 	var rows *sql.Rows
 	var err error
 	if until == "" {
