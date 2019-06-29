@@ -8,10 +8,13 @@ define pubkey
 endef
 
 .PHONY: build
-build: /var/www/kataribe.log /var/www/slow.log
+build: rotate
 	cd /var/www/webapp/go/isuwitter && go build
 	cd /var/www/webapp/go/isutomo && go build
 	systemctl restart isucon-go-isutomo isucon-go-isuwitter
+
+.PHONY: rotate
+rotate: /var/www/kataribe.log /var/www/slow.log
 
 all: git ssh
 	@clear
@@ -88,17 +91,17 @@ clean:
 .PHONY: kataribe.log.old
 kataribe.log.old:
 	mv /var/www/kataribe.log /var/www/kataribe.log.old
-	> /var/log/nginx/access.log
 
 /var/www/kataribe.log: kataribe.log.old
 	sh ./kataribe.sh
+	> /var/log/nginx/access.log
+	systemctl restart nginx
 
 .PHONY: slow.log.old
 slow.log.old:
 	mv /var/www/slow.log /var/www/slow.log.old
-	systemctl stop mariadb
-	> /var/www/slow.log
-	systemctl start mariadb
 
 /var/www/slow.log: slow.log.old
 	sh ./slowlog.sh
+	> /var/log/mariadb/slow.log
+	systemctl restart mariadb
