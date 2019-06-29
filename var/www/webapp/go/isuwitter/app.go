@@ -94,6 +94,14 @@ func redisTweetStore(userName string, text string) error {
 	return err
 }
 
+func getHomeCache(name string) error {
+	return nil
+}
+
+func updateHomeCache(name string, home string) error {
+	return redisClient.Set("home-"+name, home, 0).Err()
+}
+
 func htmlify(tweet string) string {
 	tweet = strings.Replace(tweet, "&", "&amp;", -1)
 	tweet = strings.Replace(tweet, "<", "&lt;", -1)
@@ -307,12 +315,23 @@ func topHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	re.HTML(w, http.StatusOK, "index", struct {
+	var buf bytes.Buffer
+	re.HTML(&buf, http.StatusOK, "index", struct {
 		Name   string
 		Tweets []*Tweet
 	}{
 		name, tweets,
 	})
+	if err := updateHomeCache(name, buf.String()); err != nil {
+		logger.Error(
+			"updateHomeCache",
+			zap.Error(err),
+			zap.String("name", name),
+		)
+		badRequest(w)
+		return
+	}
+	w.Write(buf.Bytes())
 }
 
 func tweetPostHandler(w http.ResponseWriter, r *http.Request) {
