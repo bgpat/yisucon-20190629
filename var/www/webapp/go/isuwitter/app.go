@@ -249,7 +249,12 @@ func initializeRedisHandler(w http.ResponseWriter, r *http.Request) {
 				logger.Error("db.Query(`SELECT * FROM friends`)", zap.Error(err))
 				return
 			}
-			if err := redisClient.SAdd("friends-"+f.Me, strings.Split(f.Friends, ",")).Err(); err != nil {
+			a := strings.Split(f.Friends, ",")
+			friends := make([]interface{}, len(a))
+			for i, s := range a {
+				friends[i] = s
+			}
+			if err := redisClient.SAdd("friends-"+f.Me, friends...).Err(); err != nil {
 				badRequest(w)
 				logger.Error("redis.SAdd", zap.Error(err), zap.String("user", f.Me))
 				return
