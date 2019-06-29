@@ -53,7 +53,7 @@ var (
 	store          *sessions.FilesystemStore
 	db             *sql.DB
 	errInvalidUser = errors.New("Invalid User")
-	redisClient         *redis.Client
+	redisClient    *redis.Client
 )
 
 func getuserID(name string) int {
@@ -228,6 +228,7 @@ func tweetPostHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_, err := db.Exec(`INSERT INTO tweets (user_id, text, created_at) VALUES (?, ?, NOW())`, userID, text)
+	redisClient.LPush("tweet-"+getUserName(userID.(int)), time.Now().Format("2006-01-02 15:04:05")+"\t"+text)
 	if err != nil {
 		badRequest(w)
 		return
@@ -386,36 +387,52 @@ func userHandler(w http.ResponseWriter, r *http.Request) {
 	until := r.URL.Query().Get("until")
 	var rows *sql.Rows
 	var err error
-	if until == "" {
-		rows, err = db.Query(`SELECT * FROM tweets WHERE user_id = ? ORDER BY created_at DESC`, userID)
-	} else {
-		rows, err = db.Query(`SELECT * FROM tweets WHERE user_id = ? AND created_at < ? ORDER BY created_at DESC`, userID, until)
-	}
-	if err != nil {
-		if err == sql.ErrNoRows {
-			http.NotFound(w, r)
-			return
-		}
-		badRequest(w)
-		return
-	}
-	defer rows.Close()
 
 	tweets := make([]*Tweet, 0)
-	for rows.Next() {
-		t := Tweet{}
-		err := rows.Scan(&t.ID, &t.UserID, &t.Text, &t.CreatedAt)
-		if err != nil && err != sql.ErrNoRows {
+	if until == "" {
+		//		rows, err = db.Query(`SELECT * FROM tweets WHERE user_id = ? ORDER BY created_at DESC`, userID)
+		//redisClient.LPush("tweet-"+getUserName(userID.(int)), time.Now().String()+"\t"+text)
+		lRange, err := redisClient.LRange("tweet-"+user, 0, 50).Result()
+		if err != nil {
 			badRequest(w)
 			return
 		}
-		t.HTML = htmlify(t.Text)
-		t.Time = t.CreatedAt.Format("2006-01-02 15:04:05")
-		t.UserName = user
-		tweets = append(tweets, &t)
+		for _, tweet := range (lRange) {
+			splited := strings.SplitN(tweet, "\t", 2)
 
-		if len(tweets) == perPage {
-			break
+			t := Tweet{}
+			t.Time = splited[0]
+			t.HTML = htmlify(splited[1])
+			t.UserName = user
+			tweets = append(tweets, &t)
+		}
+	} else {
+		rows, err = db.Query(`SELECT * FROM tweets WHERE user_id = ? AND created_at < ? ORDER BY created_at DESC`, userID, until)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				http.NotFound(w, r)
+				return
+			}
+			badRequest(w)
+			return
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			t := Tweet{}
+			err := rows.Scan(&t.ID, &t.UserID, &t.Text, &t.CreatedAt)
+			if err != nil && err != sql.ErrNoRows {
+				badRequest(w)
+				return
+			}
+			t.HTML = htmlify(t.Text)
+			t.Time = t.CreatedAt.Format("2006-01-02 15:04:05")
+			t.UserName = user
+			tweets = append(tweets, &t)
+
+			if len(tweets) == perPage {
+				break
+			}
 		}
 	}
 
