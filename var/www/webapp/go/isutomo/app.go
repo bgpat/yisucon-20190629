@@ -54,7 +54,7 @@ func (db *DB) initEnvs() error {
 	}
 
 	if len(db.Name) == 0 {
-		db.Name = "isutomo"
+		db.Name = "isuwitter"
 	}
 
 	return nil
@@ -294,7 +294,7 @@ func initializeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = exec.Command(path, "-u", "root", "-D", "isutomo", "-e", "source ../../sql/seed_isutomo.sql").Run()
+	err = exec.Command(path, "-u", "root", "-D", "isuwitter", "-e", "source ../../sql/seed_isutomo.sql").Run()
 	if err != nil {
 		errorResponseWriter(w, http.StatusInternalServerError, err)
 		return
