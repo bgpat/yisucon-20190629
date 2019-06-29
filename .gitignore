@@ -50,3 +50,7 @@
 /etc/systemd/*
 !/etc/systemd/system.conf
 
+# /slowlog.sh
+/*
+!/slowlog.sh
+
