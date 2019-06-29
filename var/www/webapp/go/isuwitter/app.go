@@ -234,6 +234,29 @@ func initializeRedisHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	{
+		// copy friends table from MariaDB
+		rows, err := db.Query(`SELECT * FROM friends`)
+		if err != nil {
+			badRequest(w)
+			logger.Error("db.Query(`SELECT * FROM friends`)", zap.Error(err))
+			return
+		}
+		for rows.Next() {
+			f := Friend{}
+			if err := rows.Scan(&f.ID, &f.Me, &f.Friends); err != nil {
+				badRequest(w)
+				logger.Error("db.Query(`SELECT * FROM friends`)", zap.Error(err))
+				return
+			}
+			if err := redisClient.SAdd("friends-"+f.Me, strings.Split(f.Friends, ",")).Err(); err != nil {
+				badRequest(w)
+				logger.Error("redis.SAdd", zap.Error(err), zap.String("user", f.Me))
+				return
+			}
+		}
+	}
+
 	if err := redisClient.Save().Err(); err != nil {
 		badRequest(w)
 		logger.Error("redisClient.FlushDB()", zap.Error(err))
