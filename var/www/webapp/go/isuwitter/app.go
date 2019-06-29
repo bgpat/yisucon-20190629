@@ -102,6 +102,10 @@ func updateHomeCache(name string, home string) error {
 	return redisClient.Set("home-"+name, home, 0).Err()
 }
 
+func clearHomeCache(name string) error {
+	return redisClient.Del(name).Err()
+}
+
 func htmlify(tweet string) string {
 	tweet = strings.Replace(tweet, "&", "&amp;", -1)
 	tweet = strings.Replace(tweet, "<", "&lt;", -1)
@@ -245,8 +249,6 @@ func topHandler(w http.ResponseWriter, r *http.Request) {
 			zap.Error(err),
 			zap.String("name", name),
 		)
-		badRequest(w)
-		return
 	}
 
 	if name == "" {
@@ -347,11 +349,12 @@ func topHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func tweetPostHandler(w http.ResponseWriter, r *http.Request) {
+	var name string
 	session := getSession(w, r)
 	userID, ok := session.Values["user_id"]
 	if ok {
-		u := getUserName(userID.(int))
-		if u == "" {
+		name = getUserName(userID.(int))
+		if name == "" {
 			http.Redirect(w, r, "/", http.StatusFound)
 			return
 		}
@@ -369,6 +372,16 @@ func tweetPostHandler(w http.ResponseWriter, r *http.Request) {
 	_, err := db.Exec(`INSERT INTO tweets (user_id, text, created_at) VALUES (?, ?, NOW())`, userID, text)
 	redisTweetStore(getUserName(userID.(int)), text)
 	if err != nil {
+		badRequest(w)
+		return
+	}
+
+	if err := clearHomeCache(name); err != nil {
+		logger.Error(
+			"clearHomeCache",
+			zap.Error(err),
+			zap.String("name", name),
+		)
 		badRequest(w)
 		return
 	}
@@ -436,6 +449,16 @@ func followHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := clearHomeCache(userName); err != nil {
+		logger.Error(
+			"clearHomeCache",
+			zap.Error(err),
+			zap.String("name", userName),
+		)
+		badRequest(w)
+		return
+	}
+
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
@@ -466,6 +489,16 @@ func unfollowHandler(w http.ResponseWriter, r *http.Request) {
 	resp, err := http.DefaultClient.Do(req)
 
 	if err != nil || resp.StatusCode != 200 {
+		badRequest(w)
+		return
+	}
+
+	if err := clearHomeCache(userName); err != nil {
+		logger.Error(
+			"clearHomeCache",
+			zap.Error(err),
+			zap.String("name", userName),
+		)
 		badRequest(w)
 		return
 	}
