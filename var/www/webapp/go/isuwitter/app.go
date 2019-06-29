@@ -49,7 +49,7 @@ const (
 )
 
 var (
-	re             *render.Render
+	re             = regexp.MustCompile("#(\\S+)(\\s|$)")
 	store          *sessions.FilesystemStore
 	db             *sql.DB
 	errInvalidUser = errors.New("Invalid User")
@@ -82,7 +82,7 @@ func htmlify(tweet string) string {
 	tweet = strings.Replace(tweet, ">", "&gt;", -1)
 	tweet = strings.Replace(tweet, "'", "&apos;", -1)
 	tweet = strings.Replace(tweet, "\"", "&quot;", -1)
-	re := regexp.MustCompile("#(\\S+)(\\s|$)")
+
 	tweet = re.ReplaceAllStringFunc(tweet, func(tag string) string {
 		return fmt.Sprintf("<a class=\"hashtag\" href=\"/hashtag/%s\">#%s</a>", tag[1:len(tag)], html.EscapeString(tag[1:len(tag)]))
 	})
