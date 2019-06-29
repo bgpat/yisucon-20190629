@@ -62,6 +62,9 @@ var (
 	errInvalidUser = errors.New("Invalid User")
 	redisClient    *redis.Client
 	logger, _      = zap.NewDevelopment()
+
+	userIDuserName = make(map[int]string)
+	userNameuserID = make(map[string]int)
 )
 
 func getuserID(name string) int {
@@ -73,13 +76,7 @@ func getuserIDCtx(pctx context.Context, name string) (context.Context, int) {
 	ctx, task := trace.NewTask(pctx, "getuserID")
 	defer task.End()
 
-	row := db.QueryRowContext(ctx, `SELECT id FROM users WHERE name = ?`, name)
-	user := User{}
-	err := row.Scan(&user.ID)
-	if err != nil {
-		return ctx, 0
-	}
-	return ctx, user.ID
+	return ctx, userNameuserID[name]
 }
 
 func getUserName(id int) string {
@@ -91,13 +88,7 @@ func getUserNameCtx(pctx context.Context, id int) (context.Context, string) {
 	ctx, task := trace.NewTask(pctx, "getUserName")
 	defer task.End()
 
-	row := db.QueryRow(`SELECT name FROM users WHERE id = ?`, id)
-	user := User{}
-	err := row.Scan(&user.Name)
-	if err != nil {
-		return ctx, ""
-	}
-	return ctx, user.Name
+	return ctx, userIDuserName[id]
 }
 
 func redisTweetStore(userName string, text string) error {
@@ -149,6 +140,24 @@ func initializeHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		badRequest(w)
 		return
+	}
+	{
+		rows, err := db.Query(`SELECT * FROM users`)
+		if err != nil {
+			badRequest(w)
+			return
+		}
+		defer rows.Close()
+		for rows.Next() {
+			user := User{}
+			err := rows.Scan(&user.ID, &user.Name, &user.Salt, &user.Password)
+			if err != nil {
+				badRequest(w)
+				return
+			}
+			userIDuserName[user.ID] = user.Name
+			userNameuserID[user.Name] = user.ID
+		}
 	}
 
 	resp, err := http.Get(fmt.Sprintf("%s/initialize", isutomoEndpoint))
