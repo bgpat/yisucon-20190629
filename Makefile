@@ -7,7 +7,7 @@ define pubkey
 
 endef
 
-.PHONY: all
+.PHONY: build
 all: git ssh
 	@clear
 	@echo "Open \e[4mhttps://github.com/$$(\
@@ -83,3 +83,7 @@ clean:
 kataribe:
 	sh ./kataribe.sh
 
+build:
+	cd var/www/webapp/go/isuwitter && go build
+	cd var/www/webapp/go/isutomo && go build
+	systemctl restart isucon-go-isutomo isucon-go-isuwitter
