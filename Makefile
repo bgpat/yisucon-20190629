@@ -88,6 +88,7 @@ clean:
 .PHONY: kataribe.log.old
 kataribe.log.old:
 	mv /var/www/kataribe.log /var/www/kataribe.log.old
+	> /var/log/nginx/access.log
 
 /var/www/kataribe.log: kataribe.log.old
 	sh ./kataribe.sh
@@ -95,6 +96,9 @@ kataribe.log.old:
 .PHONY: slow.log.old
 slow.log.old:
 	mv /var/www/slow.log /var/www/slow.log.old
+	systemctl stop mariadb
+	> /var/www/slow.log
+	systemctl start mariadb
 
 /var/www/slow.log: slow.log.old
 	sh ./slowlog.sh

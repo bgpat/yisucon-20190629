@@ -1,0 +1,12 @@
+[Unit]
+Description=isucon-go-isuwitter
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/var/www/webapp/go/isuwitter
+ExecStart=/var/www/webapp/go/isuwitter/isuwitter
+
+[Install]
+WantedBy=multi-user.target
