@@ -54,3 +54,13 @@
 /*
 !/slowlog.sh
 
+# /var/www/util/main.go
+/*
+!/var
+/var/*
+!/var/www
+/var/www/*
+!/var/www/util
+/var/www/util/*
+!/var/www/util/main.go
+
