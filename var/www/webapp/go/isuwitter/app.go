@@ -12,7 +12,7 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"net/http/pprof"
+	_ "net/http/pprof"
 	"net/url"
 	"os"
 	"os/exec"
@@ -766,6 +766,10 @@ func fileRead(fp string) []byte {
 }
 
 func main() {
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
+
 	redisClient = redis.NewClient(&redis.Options{
 		Addr:     "localhost:6379",
 		Password: "", // no password set
@@ -840,8 +844,6 @@ func main() {
 	i := r.PathPrefix("/").Subrouter()
 	i.Methods("GET").HandlerFunc(topHandler)
 	i.Methods("POST").HandlerFunc(tweetPostHandler)
-
-	r.HandleFunc("/trace", pprof.Trace).Methods("GET")
 
 	log.Fatal(http.ListenAndServe(":8080", r))
 }
