@@ -18,6 +18,7 @@ import (
 	"os/exec"
 	"regexp"
 	"runtime/trace"
+	"strconv"
 	"strings"
 	"time"
 
@@ -325,10 +326,19 @@ func topHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	_, friends, err := loadFriends(context.TODO(), name)
+	if err != nil {
+		badRequest(w)
+		return
+	}
+	friendIDs := make([]string, 0, len(friends))
+	for _, name := range friends {
+		friendIDs = append(friendIDs, strconv.Quote(strconv.Itoa(userNameuserID[name])))
+	}
+
 	var rows *sql.Rows
-	var err error
 	if until == "" {
-		rows, err = db.Query(`SELECT * FROM tweets ORDER BY created_at DESC`)
+		rows, err = db.Query(`SELECT * FROM tweets WHERE user_id IN (` + strings.Join(friendIDs, ",") + `) ORDER BY created_at DESC`)
 	} else {
 		rows, err = db.Query(`SELECT * FROM tweets WHERE created_at < ? ORDER BY created_at DESC`, until)
 	}
@@ -342,12 +352,6 @@ func topHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer rows.Close()
-
-	_, result, err := loadFriends(context.TODO(), name)
-	if err != nil {
-		badRequest(w)
-		return
-	}
 
 	tweets := make([]*Tweet, 0)
 	for rows.Next() {
@@ -365,7 +369,7 @@ func topHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		for _, x := range result {
+		for _, x := range friends {
 			if x == t.UserName {
 				tweets = append(tweets, &t)
 				break
