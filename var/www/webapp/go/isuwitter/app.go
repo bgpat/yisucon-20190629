@@ -8,10 +8,12 @@ import (
 	"fmt"
 	"html"
 	"html/template"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"regexp"
 	"strings"
 	"time"
@@ -78,7 +80,7 @@ func getUserName(id int) string {
 	return user.Name
 }
 
-func redisTweetStore(userName string, text string){
+func redisTweetStore(userName string, text string) {
 	redisClient.LPush("tweet-"+userName, time.Now().Format("2006-01-02 15:04:05")+"\t"+text)
 }
 
@@ -115,19 +117,41 @@ func initializeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
-	redisClient.FlushDB()
+	{
+		exec.Command("systemctl", "stop", "redis")
+		defer exec.Command("systemctl", "start", "redis")
 
-	rows, err := db.Query(`SELECT * FROM tweets ORDER BY created_at DESC`)
-	for rows.Next(){
-		t := Tweet{}
-		err := rows.Scan(&t.ID, &t.UserID, &t.Text, &t.CreatedAt)
-		if err!=nil{
-			badRequest(w)
+		init, err := os.Open("/var/lib/redis/init.rdb")
+		if err != nil {
+			logger.Error("failed to open init.rdb", zap.Error(err))
 			return
 		}
-
-		redisTweetStore(getUserName(t.UserID),t.Text)
+		defer init.Close()
+		dump, err := os.Open("/var/lib/redis/dump.rdb")
+		if err != nil {
+			logger.Error("failed to open dump.rdb", zap.Error(err))
+			return
+		}
+		defer dump.Close()
+		if _, err := io.Copy(dump, init); err != nil {
+			logger.Error("failed to copy redis db", zap.Error(err))
+		}
 	}
+	// -- create init.rdb
+	//
+	// redisClient.FlushDB()
+	//
+	// rows, err := db.Query(`SELECT * FROM tweets ORDER BY created_at DESC`)
+	// for rows.Next() {
+	// 	t := Tweet{}
+	// 	err := rows.Scan(&t.ID, &t.UserID, &t.Text, &t.CreatedAt)
+	// 	if err != nil {
+	// 		badRequest(w)
+	// 		return
+	// 	}
+	//
+	// 	redisTweetStore(getUserName(t.UserID), t.Text)
+	// }
 
 	re.JSON(w, http.StatusOK, map[string]string{"result": "ok"})
 }
@@ -417,7 +441,7 @@ func userHandler(w http.ResponseWriter, r *http.Request) {
 			badRequest(w)
 			return
 		}
-		for _, tweet := range (lRange) {
+		for _, tweet := range lRange {
 			splited := strings.SplitN(tweet, "\t", 2)
 
 			t := Tweet{}
