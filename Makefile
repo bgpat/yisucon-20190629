@@ -11,16 +11,16 @@ endef
 all: git ssh
 	@clear
 	@echo "Open \e[4mhttps://github.com/$$(\
-		git remote get-url origin | sed -r 's/^.*?:(.*)\.git$$/\1/' \
+		git remote -v | awk '{ print $2 }' | head -1 | sed -r 's/^.*?:(.*)\.git$$/\1/' \
 	)/settings/keys/new\e[0m and paste pubkey:\n"
 	@cat /root/.ssh/id_rsa.pub
 	@echo
 
 .PHONY: git
 git: /.gitignore /root/.vimrc /home/isucon/.vimrc /root/.gitconfig
-	git remote get-url origin \
+	git remote -v | awk '{ print $2 }' | head -1 \
 	| grep '^https://' \
-	&& git remote get-url origin \
+	&& git remote -v | awk '{ print $2 }' | head -1 \
 	| sed -r 's%^https://github.com/([a-zA-Z0-9_-]*/[a-zA-Z0-9_-]*).*$$%git@github.com:\1.git%' \
 	| xargs git remote set-url origin \
 	|| true
