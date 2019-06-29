@@ -22,6 +22,9 @@ func loadFriends(pctx context.Context, name string) (context.Context, []string, 
 		logger.Error("redis.SMembers", zap.Error(err))
 		return ctx, nil, err
 	}
+	if len(friends) == 0 {
+		logger.Warn("no friends", zap.String("name", name), zap.String("key", "friends-"+name))
+	}
 	return ctx, friends, nil
 }
 
