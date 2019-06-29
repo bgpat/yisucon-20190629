@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/sha1"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"html"
@@ -86,20 +85,6 @@ func htmlify(tweet string) string {
 		return fmt.Sprintf("<a class=\"hashtag\" href=\"/hashtag/%s\">#%s</a>", tag[1:len(tag)], html.EscapeString(tag[1:len(tag)]))
 	})
 	return tweet
-}
-
-func loadFriends(name string) ([]string, error) {
-	resp, err := http.DefaultClient.Get(isutomoEndpoint + pathURIEscape("/"+name))
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	var data struct {
-		Result []string `json:"friends"`
-	}
-	err = json.NewDecoder(resp.Body).Decode(&data)
-	return data.Result, err
 }
 
 func initializeHandler(w http.ResponseWriter, r *http.Request) {
