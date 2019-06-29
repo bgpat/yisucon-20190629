@@ -79,3 +79,6 @@ clean:
 /root/.gitconfig:
 	git config --global user.email "anonymous@example.com"
 	git config --global user.name "anonymous"
+
+kataribe:
+	cat /var/log/nginx/access.log | /var/www/kataribe -f /var/www/kataribe.toml > /var/www/kataribe.log
