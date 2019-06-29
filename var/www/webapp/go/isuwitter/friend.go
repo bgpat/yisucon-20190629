@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"runtime/trace"
-	"strings"
 
 	"go.uber.org/zap"
 )
@@ -18,16 +17,31 @@ func loadFriends(pctx context.Context, name string) (context.Context, []string, 
 	ctx, task := trace.NewTask(pctx, "loadFriends")
 	defer task.End()
 
-	friend := new(Friend)
-	stmt, err := db.PrepareContext(ctx, "SELECT * FROM friends WHERE me = ?")
+	friends, err := redisClient.SMembers("friends-" + name).Result()
 	if err != nil {
-		logger.Error(`db.Prepare("SELECT * FROM friends WHERE me = ?")`, zap.Error(err))
+		logger.Error("redis.SMembers", zap.Error(err))
 		return ctx, nil, err
 	}
-	err = stmt.QueryRowContext(ctx, name).Scan(&friend.ID, &friend.Me, &friend.Friends)
-	if err != nil {
-		logger.Error("stmt.QueryRow(name)", zap.Error(err))
-		return ctx, nil, err
+	if len(friends) == 0 {
+		logger.Warn("no friends", zap.String("name", name), zap.String("key", "friends-"+name))
+	} else {
+		logger.Debug("friends", zap.String("name", name), zap.String("key", "friends-"+name), zap.Int("len", len(friends)))
 	}
-	return ctx, strings.Split(friend.Friends, ","), nil
+	return ctx, friends, nil
+}
+
+func addFriend(me, friend string) error {
+	err := redisClient.SAdd("friends-"+me, friend).Err()
+	if err != nil {
+		logger.Error("redis.SAdd", zap.Error(err))
+	}
+	return err
+}
+
+func removeFriend(me, friend string) error {
+	err := redisClient.SRem("friends-"+me, friend).Err()
+	if err != nil {
+		logger.Error("redis.SRem", zap.Error(err))
+	}
+	return err
 }

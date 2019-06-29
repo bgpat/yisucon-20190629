@@ -229,6 +229,35 @@ func initializeRedisHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if err := redisTweetStore(getUserName(t.UserID), t.Text); err != nil {
+				badRequest(w)
+				return
+			}
+		}
+	}
+
+	{
+		// copy friends table from MariaDB
+		rows, err := db.Query(`SELECT * FROM friends`)
+		if err != nil {
+			badRequest(w)
+			logger.Error("db.Query(`SELECT * FROM friends`)", zap.Error(err))
+			return
+		}
+		for rows.Next() {
+			f := Friend{}
+			if err := rows.Scan(&f.ID, &f.Me, &f.Friends); err != nil {
+				badRequest(w)
+				logger.Error("db.Query(`SELECT * FROM friends`)", zap.Error(err))
+				return
+			}
+			a := strings.Split(f.Friends, ",")
+			friends := make([]interface{}, len(a))
+			for i, s := range a {
+				friends[i] = s
+			}
+			if err := redisClient.SAdd("friends-"+f.Me, friends...).Err(); err != nil {
+				badRequest(w)
+				logger.Error("redis.SAdd", zap.Error(err), zap.String("user", f.Me))
 				return
 			}
 		}
@@ -489,6 +518,11 @@ func followHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := addFriend(userName, r.FormValue("user")); err != nil {
+		badRequest(w)
+		return
+	}
+
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
@@ -529,6 +563,11 @@ func unfollowHandler(w http.ResponseWriter, r *http.Request) {
 			zap.Error(err),
 			zap.String("name", userName),
 		)
+		badRequest(w)
+		return
+	}
+
+	if err := removeFriend(userName, r.FormValue("user")); err != nil {
 		badRequest(w)
 		return
 	}
