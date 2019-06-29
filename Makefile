@@ -8,9 +8,9 @@ define pubkey
 endef
 
 .PHONY: build
-build:
-	cd var/www/webapp/go/isuwitter && go build
-	cd var/www/webapp/go/isutomo && go build
+build: /var/www/kataribe.log
+	cd /var/www/webapp/go/isuwitter && go build
+	cd /var/www/webapp/go/isutomo && go build
 	systemctl restart isucon-go-isutomo isucon-go-isuwitter
 
 all: git ssh
@@ -85,5 +85,9 @@ clean:
 	git config --global user.email "anonymous@example.com"
 	git config --global user.name "anonymous"
 
-kataribe:
+.PHONY: kataribe.log.old
+kataribe.log.old:
+	mv /var/www/kataribe.log /var/www/kataribe.log.old
+
+/var/www/kataribe.log: kataribe.log.old
 	sh ./kataribe.sh
