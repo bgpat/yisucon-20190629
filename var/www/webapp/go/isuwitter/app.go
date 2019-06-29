@@ -76,6 +76,10 @@ func getUserName(id int) string {
 	return user.Name
 }
 
+func redisTweetStore(userName string, text string){
+	redisClient.LPush("tweet-"+userName, time.Now().Format("2006-01-02 15:04:05")+"\t"+text)
+}
+
 func htmlify(tweet string) string {
 	tweet = strings.Replace(tweet, "&", "&amp;", -1)
 	tweet = strings.Replace(tweet, "<", "&lt;", -1)
@@ -108,6 +112,20 @@ func initializeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer resp.Body.Close()
+
+	redisClient.FlushDB()
+
+	rows, err := db.Query(`SELECT * FROM tweets ORDER BY created_at DESC`)
+	for rows.Next(){
+		t := Tweet{}
+		err := rows.Scan(&t.ID, &t.UserID, &t.Text, &t.CreatedAt)
+		if err!=nil{
+			badRequest(w)
+			return
+		}
+
+		redisTweetStore(getUserName(t.UserID),t.Text)
+	}
 
 	re.JSON(w, http.StatusOK, map[string]string{"result": "ok"})
 }
@@ -228,7 +246,7 @@ func tweetPostHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_, err := db.Exec(`INSERT INTO tweets (user_id, text, created_at) VALUES (?, ?, NOW())`, userID, text)
-	redisClient.LPush("tweet-"+getUserName(userID.(int)), time.Now().Format("2006-01-02 15:04:05")+"\t"+text)
+	redisTweetStore(getUserName(userID.(int)), text)
 	if err != nil {
 		badRequest(w)
 		return
