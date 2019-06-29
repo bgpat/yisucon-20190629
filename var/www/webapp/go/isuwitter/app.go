@@ -85,16 +85,27 @@ func redisTweetStore(userName string, text string) {
 	redisClient.LPush("tweet-"+userName, time.Now().Format("2006-01-02 15:04:05")+"\t"+text)
 }
 
-func htmlify(tweet string) string {
+func redisHashTweetStore(hashTag, userName, text string) {
+	redisClient.LPush("hashtag-"+hashTag, userName+"\t"+time.Now().Format("2006-01-02 15:04:05")+"\t"+text)
+}
+
+func htmlify(tweet, userName string) string {
 	tweet = strings.Replace(tweet, "&", "&amp;", -1)
 	tweet = strings.Replace(tweet, "<", "&lt;", -1)
 	tweet = strings.Replace(tweet, ">", "&gt;", -1)
 	tweet = strings.Replace(tweet, "'", "&apos;", -1)
 	tweet = strings.Replace(tweet, "\"", "&quot;", -1)
 
+	tags := []string{}
 	tweet = rex.ReplaceAllStringFunc(tweet, func(tag string) string {
+		tags = append(tags, tag)
 		return fmt.Sprintf("<a class=\"hashtag\" href=\"/hashtag/%s\">#%s</a>", tag[1:len(tag)], html.EscapeString(tag[1:len(tag)]))
 	})
+
+	for _, tag := range (tags) {
+		redisHashTweetStore(tag, userName, tweet)
+	}
+
 	return tweet
 }
 
@@ -268,13 +279,12 @@ func topHandler(w http.ResponseWriter, r *http.Request) {
 func tweetPostHandler(w http.ResponseWriter, r *http.Request) {
 	session := getSession(w, r)
 	userID, ok := session.Values["user_id"]
-	if ok {
-		u := getUserName(userID.(int))
-		if u == "" {
-			http.Redirect(w, r, "/", http.StatusFound)
-			return
-		}
-	} else {
+	if !ok {
+		http.Redirect(w, r, "/", http.StatusFound)
+		return
+	}
+	userName := getUserName(userID.(int))
+	if userName == "" {
 		http.Redirect(w, r, "/", http.StatusFound)
 		return
 	}
@@ -285,10 +295,10 @@ func tweetPostHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	text = htmlify(text)
+	text = htmlify(text, userName)
 
 	_, err := db.Exec(`INSERT INTO tweets (user_id, text, created_at) VALUES (?, ?, NOW())`, userID, text)
-	redisTweetStore(getUserName(userID.(int)), text)
+	redisTweetStore(userName, text)
 	if err != nil {
 		badRequest(w)
 		return
@@ -524,49 +534,67 @@ func searchHandler(w http.ResponseWriter, r *http.Request) {
 		name = ""
 	}
 
-	query := r.URL.Query().Get("q")
-	if mux.Vars(r)["tag"] != "" {
-		query = "#" + mux.Vars(r)["tag"]
-	}
-
 	until := r.URL.Query().Get("until")
-	var rows *sql.Rows
-	var err error
-	if until == "" {
-		rows, err = db.Query(`SELECT * FROM tweets ORDER BY created_at DESC`)
-	} else {
-		rows, err = db.Query(`SELECT * FROM tweets WHERE created_at < ? ORDER BY created_at DESC`, until)
-	}
-	if err != nil {
-		if err == sql.ErrNoRows {
-			http.NotFound(w, r)
-			return
-		}
-		badRequest(w)
-		return
-	}
-	defer rows.Close()
 
+	query := r.URL.Query().Get("q")
 	tweets := make([]*Tweet, 0)
-	for rows.Next() {
-		t := Tweet{}
-		err := rows.Scan(&t.ID, &t.UserID, &t.HTML, &t.CreatedAt)
-		if err != nil && err != sql.ErrNoRows {
+	
+	if mux.Vars(r)["tag"] != "" && until == "" {
+		//redisClient.LPush("hashtag-"+hashTag, userName+"\t"+time.Now().Format("2006-01-02 15:04:05")+"\t"+text)
+		query = "#" + mux.Vars(r)["tag"]
+		tag := mux.Vars(r)["tag"]
+		lRange, err := redisClient.LRange("hashtag-"+tag, 0, 50).Result()
+		if err != nil {
 			badRequest(w)
 			return
 		}
-		t.Time = t.CreatedAt.Format("2006-01-02 15:04:05")
-		t.UserName = getUserName(t.UserID)
-		if t.UserName == "" {
-			badRequest(w)
-			return
-		}
-		if strings.Index(t.HTML, query) != -1 {
+		for _, tweet := range lRange {
+			splited := strings.SplitN(tweet, "\t", 3)
+			t := Tweet{}
+			t.UserName = splited[0]
+			t.Time = splited[1]
+			t.HTML = splited[2]
 			tweets = append(tweets, &t)
 		}
+	} else {
 
-		if len(tweets) == perPage {
-			break
+		var rows *sql.Rows
+		var err error
+		if until == "" {
+			rows, err = db.Query(`SELECT * FROM tweets ORDER BY created_at DESC`)
+		} else {
+			rows, err = db.Query(`SELECT * FROM tweets WHERE created_at < ? ORDER BY created_at DESC`, until)
+		}
+		if err != nil {
+			if err == sql.ErrNoRows {
+				http.NotFound(w, r)
+				return
+			}
+			badRequest(w)
+			return
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			t := Tweet{}
+			err := rows.Scan(&t.ID, &t.UserID, &t.HTML, &t.CreatedAt)
+			if err != nil && err != sql.ErrNoRows {
+				badRequest(w)
+				return
+			}
+			t.Time = t.CreatedAt.Format("2006-01-02 15:04:05")
+			t.UserName = getUserName(t.UserID)
+			if t.UserName == "" {
+				badRequest(w)
+				return
+			}
+			if strings.Index(t.HTML, query) != -1 {
+				tweets = append(tweets, &t)
+			}
+
+			if len(tweets) == perPage {
+				break
+			}
 		}
 	}
 
