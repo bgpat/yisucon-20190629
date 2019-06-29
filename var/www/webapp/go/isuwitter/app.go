@@ -118,8 +118,9 @@ func initializeHandler(w http.ResponseWriter, r *http.Request) {
 	defer resp.Body.Close()
 
 	{
-		exec.Command("systemctl", "stop", "redis")
-		defer exec.Command("systemctl", "start", "redis")
+		if err := exec.Command("systemctl", "stop", "redis").Run(); err != nil {
+			logger.Error("failed to stop redis", zap.Error(err))
+		}
 
 		init, err := os.Open("/var/lib/redis/init.rdb")
 		if err != nil {
@@ -135,6 +136,10 @@ func initializeHandler(w http.ResponseWriter, r *http.Request) {
 		defer dump.Close()
 		if _, err := io.Copy(dump, init); err != nil {
 			logger.Error("failed to copy redis db", zap.Error(err))
+		}
+
+		if err := exec.Command("systemctl", "start", "redis").Run(); err != nil {
+			logger.Error("failed to stop redis", zap.Error(err))
 		}
 	}
 	// -- create init.rdb
