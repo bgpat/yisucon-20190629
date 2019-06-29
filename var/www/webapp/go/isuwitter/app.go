@@ -141,24 +141,8 @@ func initializeHandler(w http.ResponseWriter, r *http.Request) {
 		badRequest(w)
 		return
 	}
-	{
-		rows, err := db.Query(`SELECT * FROM users`)
-		if err != nil {
-			badRequest(w)
-			return
-		}
-		defer rows.Close()
-		for rows.Next() {
-			user := User{}
-			err := rows.Scan(&user.ID, &user.Name, &user.Salt, &user.Password)
-			if err != nil {
-				badRequest(w)
-				return
-			}
-			userIDuserName[user.ID] = user.Name
-			userNameuserID[user.Name] = user.ID
-		}
-	}
+
+	initializeUserCache()
 
 	resp, err := http.Get(fmt.Sprintf("%s/initialize", isutomoEndpoint))
 	if err != nil {
@@ -813,6 +797,24 @@ func fileRead(fp string) []byte {
 	return buf
 }
 
+func initializeUserCache() error {
+	rows, err := db.Query(`SELECT * FROM users`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		user := User{}
+		err := rows.Scan(&user.ID, &user.Name, &user.Salt, &user.Password)
+		if err != nil {
+			return err
+		}
+		userIDuserName[user.ID] = user.Name
+		userNameuserID[user.Name] = user.ID
+	}
+	return nil
+}
+
 func main() {
 	go func() {
 		log.Println(http.ListenAndServe("localhost:6060", nil))
@@ -850,6 +852,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to connect to DB: %s.", err.Error())
 	}
+
+	initializeUserCache()
 
 	store = sessions.NewFilesystemStore("", []byte(sessionSecret))
 
