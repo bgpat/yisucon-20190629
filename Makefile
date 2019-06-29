@@ -8,7 +8,7 @@ define pubkey
 endef
 
 .PHONY: build
-build: /var/www/kataribe.log
+build: /var/www/kataribe.log /var/www/slow.log
 	cd /var/www/webapp/go/isuwitter && go build
 	cd /var/www/webapp/go/isutomo && go build
 	systemctl restart isucon-go-isutomo isucon-go-isuwitter
@@ -91,3 +91,10 @@ kataribe.log.old:
 
 /var/www/kataribe.log: kataribe.log.old
 	sh ./kataribe.sh
+
+.PHONY: slow.log.old
+slow.log.old:
+	mv /var/www/slow.log /var/www/slow.log.old
+
+/var/www/slow.log: slow.log.old
+	sh ./slowlog.sh

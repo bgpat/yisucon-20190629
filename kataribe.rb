@@ -2,7 +2,7 @@ require 'json'
 logfile = readlines
 logfile = logfile.join("")
 payload = {
-	text: '```' + "\n"  + logfile + "\n" + '```'
+	text: logfile
 }
 payload = "payload=#{payload.to_json}"
 
