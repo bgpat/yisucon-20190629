@@ -21,6 +21,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
 	"github.com/unrolled/render"
+	"go.uber.org/zap"
 )
 
 type Tweet struct {
@@ -54,6 +55,7 @@ var (
 	db             *sql.DB
 	errInvalidUser = errors.New("Invalid User")
 	redisClient    *redis.Client
+	logger, _      = zap.NewDevelopment()
 )
 
 func getuserID(name string) int {
