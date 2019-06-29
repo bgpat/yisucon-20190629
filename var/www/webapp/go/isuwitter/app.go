@@ -766,16 +766,6 @@ func fileRead(fp string) []byte {
 }
 
 func main() {
-	{
-		f, err := os.Create("trace.out")
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer f.Close()
-		trace.Start(f)
-		defer trace.Stop()
-	}
-
 	redisClient = redis.NewClient(&redis.Options{
 		Addr:     "localhost:6379",
 		Password: "", // no password set
