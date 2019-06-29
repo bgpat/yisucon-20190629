@@ -20,3 +20,17 @@
 /etc/*
 !/etc/my.cnf
 
+# /var/www/webapp/go/isuwitter/app.go
+/*
+!/var
+/var/*
+!/var/www
+/var/www/*
+!/var/www/webapp
+/var/www/webapp/*
+!/var/www/webapp/go
+/var/www/webapp/go/*
+!/var/www/webapp/go/isuwitter
+/var/www/webapp/go/isuwitter/*
+!/var/www/webapp/go/isuwitter/app.go
+
