@@ -95,7 +95,7 @@ func redisTweetStore(userName string, text string) error {
 }
 
 func getHomeCache(name string) (string, error) {
-	return redisClient.Get(name).Result()
+	return redisClient.Get("home-" + name).Result()
 }
 
 func updateHomeCache(name string, home string) error {
@@ -103,7 +103,7 @@ func updateHomeCache(name string, home string) error {
 }
 
 func clearHomeCache(name string) error {
-	return redisClient.Del(name).Err()
+	return redisClient.Del("home-" + name).Err()
 }
 
 func htmlify(tweet string) string {
