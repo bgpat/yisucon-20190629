@@ -74,7 +74,7 @@ regexp = '^(GET|HEAD) /\?append=\d+&until='
 name = "GET /?append=N&until=T"
 
 [[bundle]]
-regexp = '^(GET|HEAD) /\w+/\?append=\d+&until='
+regexp = '^(GET|HEAD) /\w+\?append=\d+&until='
 name = "GET /:user/?append=N&until=T"
 
 [[bundle]]
