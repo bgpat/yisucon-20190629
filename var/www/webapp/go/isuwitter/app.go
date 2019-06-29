@@ -299,7 +299,11 @@ func topHandler(w http.ResponseWriter, r *http.Request) {
 	var rows *sql.Rows
 	var err error
 	if until == "" {
-		rows, err = db.Query(`SELECT * FROM tweets ORDER BY created_at DESC`)
+		rows, err = db.Query(`
+	SELECT tweets.* FROM tweets
+    INNER JOIN users ON tweets.user_id = users.id
+    INNER JOIN friends2 ON users.name = friends2.friend
+	WHERE friends2.me=? ORDER BY created_at DESC LIMIT 50`, name)
 	} else {
 		rows, err = db.Query(`SELECT * FROM tweets WHERE created_at < ? ORDER BY created_at DESC`, until)
 	}
