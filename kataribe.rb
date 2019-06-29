@@ -1,8 +1,11 @@
 require 'json'
 logfile = readlines
 logfile = logfile.join("")
+
+name_status = `git log --name-status HEAD^..HEAD`
+
 payload = {
-	text: logfile
+	text: "\`\`\`#{name_status}\`\`\`\n\n" + logfile
 }
 payload = "payload=#{payload.to_json}"
 
