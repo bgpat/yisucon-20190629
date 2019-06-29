@@ -25,10 +25,18 @@ func loadFriends(pctx context.Context, name string) (context.Context, []string, 
 	return ctx, friends, nil
 }
 
-func updateFriends(me, friend string) error {
+func addFriend(me, friend string) error {
 	err := redisClient.SAdd("friends-"+me, friend).Err()
 	if err != nil {
 		logger.Error("redis.SAdd", zap.Error(err))
+	}
+	return err
+}
+
+func removeFriend(me, friend string) error {
+	err := redisClient.SRem("friends-"+me, friend).Err()
+	if err != nil {
+		logger.Error("redis.SRem", zap.Error(err))
 	}
 	return err
 }

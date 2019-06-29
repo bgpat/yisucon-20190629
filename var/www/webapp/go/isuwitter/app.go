@@ -517,6 +517,11 @@ func followHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := addFriend(userName, r.FormValue("user")); err != nil {
+		badRequest(w)
+		return
+	}
+
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
@@ -557,6 +562,11 @@ func unfollowHandler(w http.ResponseWriter, r *http.Request) {
 			zap.Error(err),
 			zap.String("name", userName),
 		)
+		badRequest(w)
+		return
+	}
+
+	if err := removeFriend(userName, r.FormValue("user")); err != nil {
 		badRequest(w)
 		return
 	}
