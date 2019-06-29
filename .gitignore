@@ -34,3 +34,7 @@
 /var/www/webapp/go/isuwitter/*
 !/var/www/webapp/go/isuwitter/app.go
 
+# /kataribe.sh
+/*
+!/kataribe.sh
+
