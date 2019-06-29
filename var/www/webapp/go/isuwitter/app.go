@@ -81,8 +81,17 @@ func getUserName(id int) string {
 	return user.Name
 }
 
-func redisTweetStore(userName string, text string) {
-	redisClient.LPush("tweet-"+userName, time.Now().Format("2006-01-02 15:04:05")+"\t"+text)
+func redisTweetStore(userName string, text string) error {
+	err := redisClient.LPush("tweet-"+userName, time.Now().Format("2006-01-02 15:04:05")+"\t"+text).Err()
+	if err != nil {
+		logger.Error(
+			"redisTweetStore",
+			zap.Error(err),
+			zap.String("userName", userName),
+			zap.String("text", text),
+		)
+	}
+	return err
 }
 
 func htmlify(tweet string) string {
@@ -152,23 +161,63 @@ func initializeHandler(w http.ResponseWriter, r *http.Request) {
 			logger.Error("failed to stop redis", zap.Error(err))
 		}
 	}
-	// -- create init.rdb
-	//
-	// redisClient.FlushDB()
-	//
-	// rows, err := db.Query(`SELECT * FROM tweets ORDER BY created_at DESC`)
-	// for rows.Next() {
-	// 	t := Tweet{}
-	// 	err := rows.Scan(&t.ID, &t.UserID, &t.Text, &t.CreatedAt)
-	// 	if err != nil {
-	// 		badRequest(w)
-	// 		return
-	// 	}
-	//
-	// 	redisTweetStore(getUserName(t.UserID), t.Text)
-	// }
 
 	re.JSON(w, http.StatusOK, map[string]string{"result": "ok"})
+}
+
+func initializeRedisHandler(w http.ResponseWriter, r *http.Request) {
+	if err := redisClient.FlushDB().Err(); err != nil {
+		badRequest(w)
+		logger.Error("redisClient.FlushDB()", zap.Error(err))
+		return
+	}
+
+	{
+		// create init.rdb
+		rows, err := db.Query(`SELECT * FROM tweets ORDER BY created_at DESC`)
+		if err != nil {
+			badRequest(w)
+			logger.Error("db.Query(`SELECT * FROM tweets ORDER BY created_at DESC`)", zap.Error(err))
+			return
+		}
+		for rows.Next() {
+			t := Tweet{}
+			err := rows.Scan(&t.ID, &t.UserID, &t.Text, &t.CreatedAt)
+			if err != nil {
+				badRequest(w)
+				logger.Error("rows.Scan(&t.ID, &t.UserID, &t.Text, &t.CreatedAt)", zap.Error(err))
+				return
+			}
+			if err := redisTweetStore(getUserName(t.UserID), t.Text); err != nil {
+				return
+			}
+		}
+	}
+
+	if err := redisClient.Save().Err(); err != nil {
+		badRequest(w)
+		logger.Error("redisClient.FlushDB()", zap.Error(err))
+		return
+	}
+
+	{
+		// cp dump.rdb init.rdb
+		dump, err := os.Open("/var/lib/redis/dump.rdb")
+		if err != nil {
+			logger.Error("failed to open init.rdb", zap.Error(err))
+			return
+		}
+		defer dump.Close()
+		init, err := os.OpenFile("/var/lib/redis/init.rdb", os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			logger.Error("failed to open dump.rdb", zap.Error(err))
+			return
+		}
+		defer init.Close()
+		if _, err := io.Copy(init, dump); err != nil {
+			logger.Error("failed to copy redis db", zap.Error(err))
+		}
+	}
 }
 
 func topHandler(w http.ResponseWriter, r *http.Request) {
@@ -675,6 +724,7 @@ func main() {
 
 	r := mux.NewRouter()
 	r.HandleFunc("/initialize", initializeHandler).Methods("GET")
+	r.HandleFunc("/initialize_redis", initializeRedisHandler).Methods("GET")
 
 	l := r.PathPrefix("/login").Subrouter()
 	l.Methods("POST").HandlerFunc(loginHandler)
