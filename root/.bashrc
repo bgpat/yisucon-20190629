@@ -13,4 +13,5 @@ fi
 
 [[ -s "/root/.gvm/scripts/gvm" ]] && source "/root/.gvm/scripts/gvm"
 
+gvm use go1.12.6
 GO111MODULE=on
