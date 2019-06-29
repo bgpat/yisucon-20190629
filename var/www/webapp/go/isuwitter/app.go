@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha1"
 	"database/sql"
 	"errors"
@@ -15,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"runtime/trace"
 	"strings"
 	"time"
 
@@ -62,23 +64,39 @@ var (
 )
 
 func getuserID(name string) int {
-	row := db.QueryRow(`SELECT id FROM users WHERE name = ?`, name)
+	_, i := getuserIDCtx(context.TODO(), name)
+	return i
+}
+
+func getuserIDCtx(pctx context.Context, name string) (context.Context, int) {
+	ctx, task := trace.NewTask(pctx, "getuserID")
+	defer task.End()
+
+	row := db.QueryRowContext(ctx, `SELECT id FROM users WHERE name = ?`, name)
 	user := User{}
 	err := row.Scan(&user.ID)
 	if err != nil {
-		return 0
+		return ctx, 0
 	}
-	return user.ID
+	return ctx, user.ID
 }
 
 func getUserName(id int) string {
+	_, s := getUserNameCtx(context.TODO(), id)
+	return s
+}
+
+func getUserNameCtx(pctx context.Context, id int) (context.Context, string) {
+	ctx, task := trace.NewTask(pctx, "getUserName")
+	defer task.End()
+
 	row := db.QueryRow(`SELECT name FROM users WHERE id = ?`, id)
 	user := User{}
 	err := row.Scan(&user.Name)
 	if err != nil {
-		return ""
+		return ctx, ""
 	}
-	return user.Name
+	return ctx, user.Name
 }
 
 func redisTweetStore(userName string, text string) error {
@@ -286,7 +304,7 @@ func topHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
-	result, err := loadFriends(name)
+	_, result, err := loadFriends(context.TODO(), name)
 	if err != nil {
 		badRequest(w)
 		return
@@ -524,11 +542,14 @@ func badRequest(w http.ResponseWriter) {
 }
 
 func userHandler(w http.ResponseWriter, r *http.Request) {
+	ctx, task := trace.NewTask(r.Context(), "userHandler")
+	defer task.End()
+
 	var name string
 	session := getSession(w, r)
 	sessionUID, ok := session.Values["user_id"]
 	if ok {
-		name = getUserName(sessionUID.(int))
+		ctx, name = getUserNameCtx(ctx, sessionUID.(int))
 	} else {
 		name = ""
 	}
@@ -536,7 +557,8 @@ func userHandler(w http.ResponseWriter, r *http.Request) {
 	user := mux.Vars(r)["user"]
 	mypage := user == name
 
-	userID := getuserID(user)
+	var userID int
+	ctx, userID = getuserIDCtx(ctx, user)
 	if userID == 0 {
 		http.NotFound(w, r)
 		return
@@ -544,7 +566,9 @@ func userHandler(w http.ResponseWriter, r *http.Request) {
 
 	isFriend := false
 	if name != "" {
-		result, err := loadFriends(name)
+		var err error
+		result := []string{}
+		ctx, result, err = loadFriends(ctx, name)
 		if err != nil {
 			badRequest(w)
 			return
@@ -564,9 +588,10 @@ func userHandler(w http.ResponseWriter, r *http.Request) {
 
 	tweets := make([]*Tweet, 0)
 	if until == "" {
-		//		rows, err = db.Query(`SELECT * FROM tweets WHERE user_id = ? ORDER BY created_at DESC`, userID)
-		//redisClient.LPush("tweet-"+getUserName(userID.(int)), time.Now().String()+"\t"+text)
+		tctx, task := trace.NewTask(ctx, "LRange")
+		ctx = tctx
 		lRange, err := redisClient.LRange("tweet-"+user, 0, 50).Result()
+		defer task.End()
 		if err != nil {
 			badRequest(w)
 			return
@@ -740,6 +765,16 @@ func fileRead(fp string) []byte {
 }
 
 func main() {
+	{
+		f, err := os.Create("trace.out")
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer f.Close()
+		trace.Start(f)
+		defer trace.Stop()
+	}
+
 	redisClient = redis.NewClient(&redis.Options{
 		Addr:     "localhost:6379",
 		Password: "", // no password set
